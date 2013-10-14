@@ -17,8 +17,9 @@ class Test(unittest.TestCase):
         pass
 
 
-    def testName(self):
-        pass
+    def test_main(self):
+        import xlsx2vtb
+        namespaces, workbook = xlsx2vtb.main('Book1.xlsx')
 
 
 if __name__ == "__main__":

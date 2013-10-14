@@ -55,10 +55,50 @@ class Sheet(object):
         self.rows.append(row)
 
 
+from datetime import datetime, date, time, timedelta
 class Style(object):
+    ORIGIN = datetime(1899, 12, 30)
+
     def __init__(self, applyNumFmt, numFmtId):
         self.applyNumFmt = bool(int(applyNumFmt)) if applyNumFmt else False
         self.numFmtId = int(numFmtId) if numFmtId else numFmtId
+
+    @classmethod
+    def format(self, value, numFmtId):
+        _format = self.get_formatter(numFmtId)
+        return _format(value)
+
+
+    @classmethod
+    def get_formatter(self, numFmtId):
+        if 12 <= numFmtId <= 17: return self.format_as_date
+        if 18 <= numFmtId <= 21: return self.format_as_time
+        if numFmtId == 22: return self.format_as_datetime
+        return lambda x: x
+
+
+    @classmethod
+    def format_as_date(self, value):
+        d = self.ORIGIN + timedelta(int(value))
+        return '%04d/%02d/%02d' % (d.year, d.month, d.day)
+
+
+    @classmethod
+    def format_as_time(self, value):
+        from math import floor
+        totalsec = float(value) * 86400.0
+        hour = floor(totalsec / 3600.0)
+        rem = totalsec % 3600.0
+        minute = floor(rem / 60.0)
+        rem = rem % 60.0
+        second = floor(rem)
+        return '%02d:%02d:%02d' % (hour, minute, second)
+
+    @classmethod
+    def format_as_datetime(self, value):
+        dt = self.ORIGIN + timedelta(float(value))
+        return '%04d/%02d/%02d %02d:%02d:%02d' % (
+            dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
 
 class WorkBook(object):
@@ -67,26 +107,76 @@ class WorkBook(object):
         self.styles = styles
         self.sharedstrs = sharedstrs
 
-    def tostring(self):
+    def csvlist(self):
+        csvs = []
         for sheet in self.sheets:
-            print sheet.name, '-' * 10
+            ret_name = sheet.name
+            ret_rows = []
             for row in sheet.rows:
+                ret_row = []
                 for datum in row.data:
-                    # str判定
-                    value = sharedstrs[int(datum.value)] if datum.typ == 's' else datum.value
-                    # fmt判定
-                    value = format(self.styles, datum.fmt, float(value)) if datum.fmt else value
-                    print value,
-                print ''
+                    value = datum.value
+                    if datum.typ == 's':
+                        value = self.sharedstrs[int(value)]
+                    if datum.fmt:
+                        value = Style.format(value, self.styles[datum.fmt].numFmtId)
+                    ret_row.append(value)
+                ret_rows.append(ret_row)
+            csvs.append(CSV(ret_name, ret_rows))
+        return csvs
+
+    def vtblist(self):
+        vtbs = []
+        for sheet in self.sheets:
+            ret_name = sheet.name
+            ret_fields = []
+            header_row = sheet.rows[0]
+            for datum in header_row.data:
+                value = datum.value
+                if datum.typ == 's':
+                    value = self.sharedstrs[int(value)]
+                if datum.fmt:
+                    value = Style.format(value, self.styles[datum.fmt].numFmtId)
+                ret_fields.append(value)
+            vtbs.append(VTB(ret_name, ret_fields))
+        return vtbs
+
+import csv, os
+_pwd = os.getcwd().replace('\\', '/')
+class CSV(object):
+    def __init__(self, name, rows):
+        self.name = name
+        self.rows = [[datum.encode('utf-8') for datum in row] for row in rows]
+
+    def write(self, out=None):
+        if not out:
+            out = open('%s/%s.csv' % (_pwd, self.name), 'w')
+        writer = csv.writer(out)
+        writer.writerows(self.rows)
 
 
-def format(styles, fmtId, value):
-    numFmtId = styles[fmtId].numFmtId
-    formatter = create_formatter(numFmtId)
-    return formatter.format(value)
+    def pprint(self):
+        import sys; self.write(sys.stdout)
 
 
-def main(argv):
+class VTB(object):
+    def __init__(self, name, fields):
+        self.name = name
+        self.fields = [field.encode('utf-8') for field in fields]
+
+    def write(self, out=None):
+        from vtbtemplate import header_tmpl, field_tmpl
+        if not out:
+            out = open('%s/%s.vtb' % (_pwd, self.name), 'w')
+        out.write(header_tmpl % ('%s/%s.csv' % (_pwd, self.name.encode('utf-8'))))
+        for field in self.fields:
+            out.write(field_tmpl % field)
+
+    def pprint(self):
+        import sys; self.write(sys.stdout)
+
+from StringIO import StringIO
+def main(filename):
     """
     xlsxファイル読み込み
     workbook読み取り
@@ -94,11 +184,12 @@ def main(argv):
     style読み取り
     sharedstring読み取り
     適当にjoin
-    
+
+
     シートごとにcsv, vtbファイルを生成
     """
     namespaces = _namespaces
-    xlsx = ZipFile('Book1.xlsx', 'r')
+    xlsx = ZipFile(filename, 'r')
     sheet_dics = [xml2dict(sheet_elem)
         for sheet_elem in ElementTree.fromstring(
             xlsx.read('xl/workbook.xml')
@@ -130,10 +221,16 @@ def main(argv):
     styles = [Style(style_dic.get('applyNumberFormat'), style_dic.get('numFmtId'))
         for style_dic in style_dics]
 
-    print_sheets(workbook)
+    workbook = WorkBook(sheets, styles, sharedstrs)
+    csvs = workbook.csvlist()
+    for csv in csvs:
+        csv.write()
+    vtbs = workbook.vtblist()
+    for vtb in vtbs:
+        vtb.write()
 
-    return namespaces, sheets, sharedstrs, styles
+    return namespaces, workbook
 
 if __name__ == '__main__':
     import sys; argv = sys.argv
-    main(argv)
+    main(argv[1])
