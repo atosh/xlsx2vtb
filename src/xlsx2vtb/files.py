@@ -31,8 +31,9 @@ class VTB(object):
         if not out:
             out = open('%s/%s.vtb' % (_pwd, self.name), 'wb')
         out.write(header_tmpl % ('%s/%s.csv' % (_pwd, self.name.encode('utf-8'))))
-        for field in self.fields:
-            out.write(field_tmpl % field)
+        for i in range(len(self.fields)):
+            field = self.fields[i]
+            out.write(field_tmpl % (field, i + 1))
 
     def pprint(self):
         import sys; self.write(sys.stdout)

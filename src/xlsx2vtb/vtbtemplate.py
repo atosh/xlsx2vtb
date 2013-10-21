@@ -47,7 +47,7 @@ Begin VirtualField
 	Type = "VARCHAR"
 	Precision = "0"
 	Scale = "0"
-	Position = "1"
+	Position = "%d"
 	Expression = ""
 End VirtualField
 '''
