@@ -2,9 +2,14 @@ xlsx2vtb
 ========
 generate csv/vtb files from Excel(xlsx) sheets.
 
-usage: python xlsx2vtb/xlsx2vtb <xlsx file>
+usage: `python xlsx2vtb <xlsx file>`
 
 Specification and Restriction:
-* csv/vtb file name is defined from sheet name.
-* It is assumed that data in each sheets start from A1 cell.
-* Header row is always needed.
+* csv/vtb file name is defined from sheet name
+* it is assumed that data in each sheets start from A1 cell
+* header row is always needed
+
+Future Work:
+* allow custom file name
+  * auto-deploy to VTB path
+* evaluate expression
